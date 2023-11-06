@@ -27,8 +27,14 @@ ageList = ['(0 - 5)', '(6 - 11)', '(12 - 16)', '(17 - 21)', '(22 - 30)', '(31 - 
 
 cam = 0
 video = cv2.VideoCapture(cam)
-video.set(3, 960)
-video.set(4, 540)
+# video.set(3, 960)
+# video.set(4, 540)
+
+video.set(3, 640)
+video.set(4, 480)
+
+seconds, minutes, hours = 0, 0, 0
+
 if cam == 0:
     cam = 1
 if cam == 1:
@@ -64,7 +70,7 @@ fontStyle = cv2.FONT_HERSHEY_DUPLEX
 fontColor = (0, 0, 0)
 fontSize = 0.45
 
-confidence = 0.5
+confidence = 0.4
 
 startDuration = 0
 prev_start_time = 0
@@ -212,10 +218,12 @@ while True:
     if not ret:
         print("Camera disconnected")
         break
+    # frame = cv2.resize(frame, (640,480))
     H, W = frame.shape[:2]
+    # print(H, W)
     # h_resize, w_resize = round(H*0.5), round(W*0.5)
     # frame = cv2.resize(frame, (w_resize, h_resize))
-    blob = cv2.dnn.blobFromImage(frame, 1.0, (300, 300), [104, 117, 123], True, False)
+    blob = cv2.dnn.blobFromImage(frame, 1.0, (300, 300), [104, 177, 123], True, False)
     faceNet.setInput(blob)
     detections = faceNet.forward()
     detect_object = detections[0,0,:,1]
@@ -256,6 +264,7 @@ while True:
             text = "Person {}".format(str_indexPerson)
             cv2.putText(frame, text, (centroid[2], centroid[3] - 10), fontStyle, ratioFont, (0, 255, 0), 1)
             boxSize = (endX - startX)*(endY - startY)
+            # print(boxSize)
 
             # DEFINE ROI
             biasX = round((endX - startX)*0.35)
@@ -361,7 +370,7 @@ while True:
                         durationDataID[index][attTrue[index]-1] = durationID[index]
                         timeDataID[index][attTrue[index]-1] = timeID[index][0]
                         totalDurationID[index] = sum(durationDataID[index])
-                        if durationID[index] >= 0.5:
+                        if durationID[index] >= 0.05:
                             if pic_name[index][1]:
                                 pic_name[index][0] = f"{length_data+1}_{date}_id{indexPerson}_att{attTrue[index]}.jpg"
                                 pic_nameDataID[index][attTrue[index]-1] = pic_name[index][0]
@@ -430,7 +439,7 @@ while True:
                         durationDataID[index][attTrue[index]-1] = durationID[index]
                         timeDataID[index][attTrue[index]-1] = timeID[index][0]
                         totalDurationID[index] = sum(durationDataID[index])
-                        if durationID[index] >= 0.5:
+                        if durationID[index] >= 0.05:
                             if pic_name[index][1]:
                                 pic_name[index][0] = f"{length_data+1}_{date}_id{indexPerson}_att{attTrue[index]}.jpg"
                                 pic_nameDataID[index][attTrue[index]-1] = pic_name[index][0]
@@ -499,7 +508,7 @@ while True:
                         durationDataID[index][attTrue[index]-1] = durationID[index]
                         timeDataID[index][attTrue[index]-1] = timeID[index][0]
                         totalDurationID[index] = sum(durationDataID[index])
-                        if durationID[index] >= 0.5:
+                        if durationID[index] >= 0.05:
                             if pic_name[index][1]:
                                 pic_name[index][0] = f"{length_data+1}_{date}_id{indexPerson}_att{attTrue[index]}.jpg"
                                 pic_nameDataID[index][attTrue[index]-1] = pic_name[index][0]
@@ -568,7 +577,7 @@ while True:
                         durationDataID[index][attTrue[index]-1] = durationID[index]
                         timeDataID[index][attTrue[index]-1] = timeID[index][0]
                         totalDurationID[index] = sum(durationDataID[index])
-                        if durationID[index] >= 0.5:
+                        if durationID[index] >= 0.05:
                             if pic_name[index][1]:
                                 pic_name[index][0] = f"{length_data+1}_{date}_id{indexPerson}_att{attTrue[index]}.jpg"
                                 pic_nameDataID[index][attTrue[index]-1] = pic_name[index][0]
@@ -625,15 +634,15 @@ while True:
             if len(interestDataID[index]) == attTrue[index]-1:
                 interestDataID[index].append(0)
 
-            if durationID[index] >= 0.5 and durationID[index] < 2.5:
+            if durationID[index] >= 0.05 and durationID[index] < 2:
                 interest[index] = 0
-            if durationID[index] >= 2.5 and durationID[index] < 5:
+            if durationID[index] >= 2 and durationID[index] < 5:
                 interest[index] = 1
             if durationID[index] >= 5:
                 interest[index] = 2
             interestDataID[index][attTrue[index]-1] = interest[index]
 
-            if durationID[index] > 0.5:
+            if durationID[index] > 0.05:
                 worksheet.write(sessID+1, column, sessID+1)
                 worksheet.write(sessID+1, column+1, indexPerson)
                 worksheet.write(sessID+1, column+2, genderID[index])
@@ -682,4 +691,4 @@ print(f"Program Running Duration: {hours}:{minutes}:{seconds}")
 print(f'Data saved in {xlsx_path}/data_{date}_{length_data+1}.xlsx')
 print(f'Picture saved in {pic_path}/')
 cv2.destroyAllWindows()
-video.release
+video.release()
