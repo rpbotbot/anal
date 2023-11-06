@@ -36,12 +36,11 @@ detector = FaceMeshDetector()
 ct = CentroidTracker()
 
 date = time.strftime('%Y-%m-%d')
+status = 'Front'
 
 xlsx_path = f"C:/Users/NUC 11PAHi5/Pictures/Analytical/Dataset/Analytical_Person/{date}/Front/Data"
 pic_path = f"C:/Users/NUC 11PAHi5/Pictures/Analytical/Dataset/Analytical_Person/{date}/Front/Picture"
 
-# csv_path = f"C:/Users/whyag/Documents/Wahyu_Agung/Dataset/Analytical_Person/{date}/Rear/Data"
-# pic_path = f"C:/Users/whyag/Documents/Wahyu_Agung/Dataset/Analytical_Person/{date}/Rear/Picture"
 isDir_xlsx = os.path.isdir(xlsx_path)
 isDir_pic = os.path.isdir(pic_path)
 if not isDir_xlsx:
@@ -122,8 +121,19 @@ start_durationPred = [
     ]
 
 times = [
-    [], [], [], [], [], [], [], [], [], [], [], [], [], [], [],
-    [], [], [], [], [], [], [], [], [], [], [], [], [], [], [],
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ]
+
+attTrue = 1
+attFalse = 1
+interest = 0
+t_status = [
+    True, True, True, True, True, True,
+    True, True, True, True, True, True,
+    True, True, True, True, True, True,
+    True, True, True, True, True, True,
+    True, True, True, True, True, True, 
     ]
 
 genderID = [
@@ -139,7 +149,7 @@ ageID = [
     "", "", "", "", "", "",
     "", "", "", "", "", "",
     "", "", "", "", "", "",
-    "", "", "", "", "", "", 
+    "", "", "", "", "", "",
     ]
 
 emotionID = [
@@ -147,7 +157,7 @@ emotionID = [
     "", "", "", "", "", "",
     "", "", "", "", "", "",
     "", "", "", "", "", "",
-    "", "", "", "", "", "", 
+    "", "", "", "", "", "",
     ]
 
 pic_name = [
@@ -166,30 +176,44 @@ statusUpload = [
     False, False, False, False, False, False,
     ]
 
-sess_id = ''.join(random.choice('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz') for i in range(16))
+session = ''.join(random.choice('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz') for i in range(16))
 
 payload = {
+  'sess_id': 0, # integer
   'person_id': 0, # integer
   'gender': '', # string
   'age': '', # string
   'att_dur': 0.0, # float
-  'att_times': 0, # integer
+  'interest': 0, # integer
   'date': "YYYY-MM-DD", # string
   'time': "hh:mm:ss", # string
   'cam': 0, # integer
-  'files': "xxx.jpg", # string
-  'sess_id': "xxxxxxxxxxxxxxxx", # string
+  'filename': "xxx.jpg", # string
+  'session': "xxxxxxxxxxxxxxxx", # string
 }
 
 format = workbook.add_format()
 format.set_align('center')
 
-worksheet.set_column(3, 4, 17)
+worksheet.set_column(0, 0, 10)
+worksheet.set_column(4, 4, 17)
 worksheet.set_column(5, 6, 10)
-worksheet.set_column(7, 7, 20)
-worksheet.set_column(0, 7, cell_format=format)
+worksheet.set_column(8, 8, 25)
+worksheet.set_column(0, 8, cell_format=format)
+
+worksheet.write(row, column, 'Session ID')
+worksheet.write(row, column+1, 'Person ID')
+worksheet.write(row, column+2, 'Gender')
+worksheet.write(row, column+3, 'Age')
+worksheet.write(row, column+4, 'Attention Duration')
+worksheet.write(row, column+5, 'Interest')
+worksheet.write(row, column+6, 'Date')
+worksheet.write(row, column+7, 'Time')
+worksheet.write(row, column+8, 'Files Name')
 
 while True:
+    global index
+    global index_clear
     start_time = time.time()
     count = round(time.time(), 2)
     if start:
@@ -221,21 +245,22 @@ while True:
             indexPerson = objectID+1
             str_indexPerson = str(indexPerson)
             statusUpload[index] = True
-            times[index].append(time.strftime('%T'))
+            # times[index].append(time.strftime('%T'))
             index_clear = index + 15
             if index_clear > 29:
                 index_clear = index_clear - 30
             if statusUpload[index_clear]:
+                payload["sess_id"] = "indexPerson - 15"
                 payload["person_id"] = indexPerson - 15
                 payload["gender"] = genderID[index_clear]
                 payload["age"] = ageID[index_clear]
                 payload["att_dur"] = totalDurationID[index_clear]
-                payload["att_times"] = gazeT[index_clear] + 1
+                payload["interest"] = gazeT[index_clear] + 1
                 payload["date"] = date
-                payload["time"] = times[index_clear][0]
-                payload["files"] = pic_name[index_clear]
+                payload["time"] = times[index_clear]
                 payload["cam"] = cam
-                payload["sess_id"] = sess_id
+                payload["filename"] = pic_name[index_clear]
+                payload["session"] = session
                 res = requests.post('https://ropi.web.id/api/pos.php', data=payload)
                 print(res.text)
                 if res.text == "Ok!":
@@ -243,16 +268,13 @@ while True:
                 else:
                     print("Upload Failed")
                 statusUpload[index_clear] = False
-
             start_durationID[index_clear] = []
             start_durationPred[index_clear] = []
             genderPredID[index_clear] = []
             agePredID[index_clear] = []
-            genderID[index_clear] = ""
-            ageID[index_clear] = ""
             gazeT[index_clear] = 0
             gazeF[index_clear] = 0
-            times[index_clear] = []
+            times[index_clear] = 0
             durationDataID[index_clear] = [0]
             pic_name[index_clear] = ""
             startX, startY, endX, endY = centroid[2], centroid[3], centroid[4], centroid[5]
@@ -332,9 +354,11 @@ while True:
                 cv2.putText(frame, f'Gender: {finalGender}', (startX+2, endY+15), fontStyle, fontSize, fontColor, 1)
                 cv2.putText(frame, f'Age: {finalAge}', (startX+2, endY+30), fontStyle, fontSize, fontColor, 1)
                 if bias < 15:
+                    if t_status[index]:
+                        times[index] = time.strftime('%T')
+                        t_status[index] = False
                     start_durationID[index].append(duration)
-                    durationID[index] = round((duration - start_durationID[index][0]), 2) 
-                    # durationDataID[index] = durationID[index]
+                    durationID[index] = round((duration - start_durationID[index][0]), 2)
                     str_gaze = str(durationID[index])
                     startX_stats, endX_stats, startY_stats, endY_stats = startX, startX + 120, endY - 1, endY + 50
                     if startX_stats < 0:
@@ -352,30 +376,30 @@ while True:
                     cv2.putText(frame, f'Gender: {finalGender}', (startX+2, endY+15), fontStyle, fontSize, fontColor, 1)
                     cv2.putText(frame, f'Age: {finalAge}', (startX+2, endY+30), fontStyle, fontSize, fontColor, 1)
                     # cv2.putText(frame, f'Emotion: {emotionID[index]}', (startX+2, endY+45), fontStyle, fontSize, fontColor, 1)
-                    cv2.putText(frame, str_gaze, (startX+2, endY+45), fontStyle, fontSize, fontColor, 1)
-                    if durationID[index] >= 2:
-                        if gazeF[index] == gazeT[index]:
-                            gazeF[index] += 1
-                    
+                    cv2.putText(frame, str_gaze, (startX+2, endY+45), fontStyle, fontSize, fontColor, 1)            
                     print(f"Person: {objectID+1}, Duration: {durationID[index]}, Attention: {gazeT[index]+1}")
+                    print(f'Index: {attTrue}')
                     durationDataID[index][gazeT[index]] = durationID[index]
                     totalDurationID[index] = sum(durationDataID[index])
-
-                    if totalDurationID[index] >= 5:
+                    if durationID[index] >= 0.5:
                         if take_picture:
-                            pic_name[index] = f"{length_data+1}_{date}_id{objectID+1}.jpg"
+                            pic_name[index] = f"{length_data+1}_{date}_id{objectID+1}_att{gazeT[index]+1}.jpg"
                             cv2.imwrite(f"{pic_path}/{pic_name[index]}", ROI)
                             print("Picture taken")
                         take_picture = False
-                        # cv2.rectangle(frame, (startX, startY), (endX, endY), (255, 0, 0), int(round(H/320)))
+                        if gazeF[index] == gazeT[index]:
+                            gazeF[index] += 1
+                            attFalse += 1
                                  
                     else:
                         take_picture = True
                         pic_name[index] = ''
                         
                 else:
+                    t_status[index] = True
                     if gazeT[index] != gazeF[index]:
                         gazeT[index] += 1
+                        attTrue += 1
                     startX_stats, endX_stats, startY_stats, endY_stats = startX, startX + 120, endY - 1, endY + 50
                     if startX_stats < 0:
                         startX_stats = 0
@@ -396,37 +420,47 @@ while True:
             
             else:
                 print("Face is not accurate")
+                t_status[index] = True
                 start_durationID[index] = []
                 start_durationPred[index] = []
                 genderPredID[index] = []
                 agePredID[index] = []
+                if attTrue != attFalse:
+                    attTrue += 1
                 # emotionPredID[index] = []
             
             if len(durationDataID[index]) == gazeT[index]:
                 durationDataID[index].append(0)
+            
+            if durationID[index] >= 0.5 and durationID[index]  < 2.5:
+                interest = 0
+            if durationID[index] >= 2.5 and durationID[index]  < 5:
+                interest = 1
+            if durationID[index] >= 5:
+                interest = 2
 
-            worksheet.write(row, column, 'Person ID')
-            worksheet.write(row, column+1, 'Gender')
-            worksheet.write(row, column+2, 'Age')
-            worksheet.write(row, column+3, 'Attention Duration')
-            worksheet.write(row, column+4, 'Attention Times')
-            worksheet.write(row, column+5, 'Date')
-            worksheet.write(row, column+6, 'Time')
-            worksheet.write(row, column+7, 'Picture Name')
-
-            worksheet.write(objectID+1, column, indexPerson)
-            worksheet.write(objectID+1, column+1, genderID[index])
-            worksheet.write(objectID+1, column+2, ageID[index])
-            worksheet.write(objectID+1, column+3, totalDurationID[index])
-            worksheet.write(objectID+1, column+4, gazeT[index]+1)
-            worksheet.write(objectID+1, column+5, date)
-            worksheet.write(objectID+1, column+6, times[index][0])
-            worksheet.write(objectID+1, column+7, pic_name[index])
+            if totalDurationID[index] > 0.5:
+                worksheet.write(attTrue, column, attTrue)
+                worksheet.write(attTrue, column+1, indexPerson)
+                worksheet.write(attTrue, column+2, genderID[index])
+                worksheet.write(attTrue, column+3, ageID[index])
+                worksheet.write(attTrue, column+4, durationID[index])
+                worksheet.write(attTrue, column+5, interest)       
+                worksheet.write(attTrue, column+6, date)
+                worksheet.write(attTrue, column+7, times[index])         
+                worksheet.write(attTrue, column+8, pic_name[index])
 
     else:
         print("No Face")
+        # t_status[index] = True
+        if attTrue != attFalse:
+            attTrue += 1
 
     duration = round(duration)
+    sec_duration = duration % 60
+    min_duration = duration // 60
+    hour_duration = min_duration // 60
+    sec, min, hour = str(sec_duration).zfill(2), str(min_duration).zfill(2), str(hour_duration).zfill(2)
     # print(duration)
 
     fps = str(1.0 // (time.time() - start_time))
@@ -436,7 +470,8 @@ while True:
     if k == 27:
         break
 
-print("Program Running Duration:", duration)
+print()
+print(f"Program Running Duration: {hour}:{min}:{sec}")
 workbook.close()
 print(f'Data saved in {xlsx_path}/data_{date}_{length_data+1}.xlsx')
 print(f'Picture saved in {pic_path}/')
