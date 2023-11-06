@@ -6,6 +6,7 @@ from Tracker.centroidtracker import CentroidTracker
 import os
 import random
 import requests
+import zmq
 
 faceProto = "face_deploy.prototxt"
 faceModel = "face_net.caffemodel"
@@ -17,6 +18,11 @@ ageProto = "age_deploy.prototxt"
 ageModel = "age_net.caffemodel"
 ageNet = cv2.dnn.readNetFromCaffe(ageProto, ageModel)
 
+context = zmq.Context()
+socket = context.socket(zmq.REP)
+socket.bind("tcp://*:5555")
+
+
 MODEL_MEAN_VALUES = (78.4263377603, 87.7689143744, 114.895847746)
 
 genderList = ['Male', 'Female']
@@ -27,7 +33,7 @@ date = time.strftime('%Y-%m-%d')
 robotID = 1
 maxSessID = 50
 
-cam = 0
+cam = 1
 camStatus = 'Rear'
 
 seconds = minutes = hours = 0
@@ -43,21 +49,43 @@ if cam == 2:
 else:
     cam = 2
 
-data_path = f"C:/Users/NUC 11PAHi5/Pictures/Analytical/Dataset/Analytical_Person/{date}/{camStatus}/Data"
-pic_path = f"C:/Users/NUC 11PAHi5/Pictures/Analytical/Dataset/Analytical_Person/{date}/{camStatus}/Picture"
+data_path = f"C:\MY FILE\CODE\Analytical\Dataset\Person_Analyze"
+pic_path = f"C:\MY FILE\CODE\Analytical\Dataset\Person_Analyze"
 
-isDir_data = os.path.isdir(data_path)
-isDir_pic = os.path.isdir(pic_path)
-if not isDir_data:
-    os.makedirs(data_path)
-if not isDir_pic:
-    os.makedirs(pic_path)
+isExist_data  = os.path.exists(data_path)
+isExist_pic  = os.path.exists(pic_path)
 
-listDir = os.listdir(f"C:/Users/NUC 11PAHi5/Pictures/Analytical/Dataset/Analytical_Person/{date}/{camStatus}/Data")
-if len(listDir) != 0:
-    listDir_order = int(listDir[-1].split('_')[2])
+if not isExist_data:
+    data_path = f"Person_Analyze/{date}/{camStatus}/Data"
+    isDir_data = os.path.isdir(data_path)
+    if not isDir_data:
+        os.makedirs(data_path)
+    listDir = os.listdir(data_path)
+    if len(listDir) != 0:
+        listDir_order = int(listDir[-1].split('_')[2])
+    else:
+        listDir_order = 0
 else:
-    listDir_order = 0
+    data_path = f"{data_path}/{date}/{camStatus}/Data"
+    isDir_data = os.path.isdir(data_path)
+    if not isDir_data:
+        os.makedirs(data_path)
+    listDir = os.listdir(data_path)
+    if len(listDir) != 0:
+        listDir_order = int(listDir[-1].split('_')[2])
+    else:
+        listDir_order = 0
+
+if not isExist_pic:
+    pic_path = f"Person_Analyze/{date}/{camStatus}/Picture"
+    isDir_pic = os.path.isdir(pic_path)
+    if not isDir_pic:
+        os.makedirs(pic_path)
+else:
+    pic_path = f"{pic_path}/{date}/{camStatus}/Picture"
+    isDir_pic = os.path.isdir(pic_path)
+    if not isDir_pic:
+        os.makedirs(pic_path)
 
 detector = FaceMeshDetector()
 ct = CentroidTracker()
@@ -652,9 +680,11 @@ while True:
     cv2.putText(frame, f'FPS: {str(fps)}', (15, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
     cv2.imshow("Frame", frame)
     k = cv2.waitKey(1)
-    if k == 27:
+    if socket.recv_string:
         break
-    if k == ord(' '):
+    elif k == 27:
+        break
+    elif k == ord(' '):
         cv2.waitKey(-1)
 
 if len(idxSet) > 0:
