@@ -72,10 +72,12 @@ confidence = 0.5
 startDuration = 0
 prev_start_time = 0
 index_request = 0
-sessID = 0
 startProgram = True
 
-idx = []
+idxList = []
+idxStatus = []
+idxSet = set()
+
 durationID = [
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -376,12 +378,13 @@ while True:
                             print(f"Picture saved as {pic_name[index][0]}")
                         if attFalse[index] == attTrue[index]:
                             attFalse[index] += 1
-                            idx.append([indexPerson, attTrue[index], index, True])
+                            idxList.append([indexPerson, attTrue[index], index])
+                            idxSet.add(indexPerson - 1)
+                            idxStatus.append(True)
                         pic_name[index][1] = False
-                        sessID = idx.index([indexPerson, attTrue[index], index, True])
-                        print(f"Index: {sessID}, Person: {indexPerson}, Duration: {durationID[index]}, Attention: {attTrue[index]}")  
-                        # print(idx)
-                        # print()        
+                        sessID = idxList.index([indexPerson, attTrue[index], index])
+                        # print(f"Index: {sessID}, Person: {indexPerson}, Duration: {durationID[index]}, Attention: {attTrue[index]}")
+                        # print(idxList)
 
                     else:
                         pic_name[index] = ["", True]
@@ -407,7 +410,7 @@ while True:
                     cv2.putText(frame, f'Gender: {finalGender}', (startX+2, endY+15), fontStyle, fontSize, fontColor, 1)
                     cv2.putText(frame, f'Age: {finalAge}', (startX+2, endY+30), fontStyle, fontSize, fontColor, 1)
                     # cv2.putText(frame, f'Emotion: {emotionID[index]}', (startX+2, endY+45), fontStyle, fontSize, fontColor, 1)
-            
+
             else:
                 print("Face is not accurate")
                 timeID[index][1] = True
@@ -417,15 +420,15 @@ while True:
                 agePredID[index] = []
                 # emotionPredID[index] = []
 
-            if len(durationDataID[index]) == attTrue[index]:
+            if len(durationDataID[index]) == attTrue[index]-1:
                 durationDataID[index].append(0)
-            if len(timeDataID[index]) == attTrue[index]:
+            if len(timeDataID[index]) == attTrue[index]-1:
                 timeDataID[index].append("")
-            if len(pic_nameDataID[index]) == attTrue[index]:
+            if len(pic_nameDataID[index]) == attTrue[index]-1:
                 pic_nameDataID[index].append("")
-            if len(interestDataID[index]) == attTrue[index]:
-                interestDataID[index].append(0) 
-            
+            if len(interestDataID[index]) == attTrue[index]-1:
+                interestDataID[index].append(0)
+
             if durationID[index] >= 0.5 and durationID[index] < 2.5:
                 interest[index] = 0
             if durationID[index] >= 2.5 and durationID[index] < 5:
@@ -443,36 +446,76 @@ while True:
                 worksheet.write(sessID+1, column+5, interest[index])       
                 worksheet.write(sessID+1, column+6, date)
                 worksheet.write(sessID+1, column+7, timeID[index][0])         
-                worksheet.write(sessID+1, column+8, pic_name[index][0])
-            
-                index_request = sessID - 15
-                if index_request >= 0:
-                    indexPerson_request = idx[index_request][0]
-                    indexAtt_request = idx[index_request][1]
-                    uniqueIndex_request = idx[index_request][2]
-                    if idx[index_request][3]:
-                        payload["sess_id"] = index_request
-                        payload["person_id"] = indexPerson_request
-                        payload["gender"] = genderID[uniqueIndex_request]
-                        payload["age"] = ageID[uniqueIndex_request]
-                        payload["att_dur"] = durationDataID[uniqueIndex_request][indexAtt_request-1]
-                        payload["interest"] = interestDataID[uniqueIndex_request][indexAtt_request-1]
-                        payload["date"] = date
-                        payload["time"] = timeDataID[uniqueIndex_request][indexAtt_request-1]
-                        payload["cam"] = cam
-                        payload["filename"] = pic_nameDataID[uniqueIndex_request][indexAtt_request-1]
-                        payload["session"] = session
-                        payload["robot_id"] = 1
-                        try:
-                            res = requests.post('https://ropi.web.id/api/pos.php', data=payload)
-                            if res.text == "Ok!":
-                                print("Upload Success!")
-                            else:
-                                print("Upload Failed ...")
-                        except requests.exceptions.ConnectionError:
-                            print('No internet connection , upload failed ...')
+                worksheet.write(sessID+1, column+8, pic_name[index][0])        
 
-                        idx[index_request][3] = False
+            # idxActive = set(objects.keys())
+            # idxInactive = idxSet.difference(idxActive)
+
+            # if attTrue[index] > 1:
+            #     sessID_request = idxList.index([indexPerson, attTrue[index]-1, index])
+            #     indexPerson_request = idxList[sessID_request][0]
+            #     indexAtt_request = idxList[sessID_request][1]
+            #     uniqueIndex_request = idxList[sessID_request][2]
+            #     # print(f"indexPerson_request: {indexPerson_request}, indexAtt_request: {indexAtt_request}, uniqueIndex_request: {uniqueIndex_request}")
+            #     if idxStatus[sessID_request]:
+            #         print(f"A. Upload {indexPerson} {attTrue[index]-1} {index}")
+            #         payload["sess_id"] = sessID_request
+            #         payload["person_id"] = indexPerson_request
+            #         payload["gender"] = genderID[uniqueIndex_request]
+            #         payload["age"] = ageID[uniqueIndex_request]
+            #         payload["att_dur"] = durationDataID[uniqueIndex_request][indexAtt_request-1]
+            #         payload["interest"] = interestDataID[uniqueIndex_request][indexAtt_request-1]
+            #         payload["date"] = date
+            #         payload["time"] = timeDataID[uniqueIndex_request][indexAtt_request-1]
+            #         payload["cam"] = cam
+            #         payload["filename"] = pic_nameDataID[uniqueIndex_request][indexAtt_request-1]
+            #         payload["session"] = session
+            #         payload["robot_id"] = 1
+            #         try:
+            #             res = requests.post('https://ropi.web.id/api/pos.php', data=payload)
+            #             if res.text == "Ok!":
+            #                 print("Upload Success!")
+            #             else:
+            #                 print(f"Upload Failed ... {res.text}")
+            #         except requests.exceptions.ConnectionError:
+            #             print('No internet connection, upload failed ...')
+            #     idxStatus[sessID_request] = False
+
+            # if len(idxInactive) > 0:
+            #     idxValue = idxInactive.pop()
+            #     index_request = idxValue % 30
+            #     if durationDataID[idxValue][-1] == 0:
+            #         durationDataID[idxValue].remove(0)
+            #         attTrue[idxValue] -= 1
+            #     sessID_request = idxList.index([idxValue + 1, attTrue[idxValue], index_request])
+            #     indexPerson_request = idxList[sessID_request][0]
+            #     indexAtt_request = idxList[sessID_request][1]
+            #     uniqueIndex_request = idxList[sessID_request][2]
+            #     # print(f"indexPerson_request: {indexPerson_request}, indexAtt_request: {indexAtt_request}, uniqueIndex_request: {uniqueIndex_request}")
+            #     if idxStatus[sessID_request]:
+            #         print(f"B. Upload {idxValue + 1} {attTrue[idxValue]} {index_request}")
+            #         payload["sess_id"] = sessID_request
+            #         payload["person_id"] = indexPerson_request
+            #         payload["gender"] = genderID[uniqueIndex_request]
+            #         payload["age"] = ageID[uniqueIndex_request]
+            #         payload["att_dur"] = durationDataID[uniqueIndex_request][indexAtt_request-1]
+            #         payload["interest"] = interestDataID[uniqueIndex_request][indexAtt_request-1]
+            #         payload["date"] = date
+            #         payload["time"] = timeDataID[uniqueIndex_request][indexAtt_request-1]
+            #         payload["cam"] = cam
+            #         payload["filename"] = pic_nameDataID[uniqueIndex_request][indexAtt_request-1]
+            #         payload["session"] = session
+            #         payload["robot_id"] = 1
+            #         try:
+            #             res = requests.post('https://ropi.web.id/api/pos.php', data=payload)
+            #             if res.text == "Ok!":
+            #                 print("Upload Success!")
+            #             else:
+            #                 print(f"Upload Failed ... {res.text}")
+            #         except requests.exceptions.ConnectionError:
+            #             print('No internet connection, upload failed ...')
+            #     idxStatus[sessID_request] = False
+            #     idxSet.remove(min(idxSet))
 
     else:
         print("No Face")
@@ -481,7 +524,7 @@ while True:
     sec_duration = duration % 60
     min_duration = duration // 60
     hour_duration = min_duration // 60
-    sec, min, hour = str(sec_duration).zfill(2), str(min_duration).zfill(2), str(hour_duration).zfill(2)
+    seconds, minutes, hours = str(sec_duration).zfill(2), str(min_duration).zfill(2), str(hour_duration).zfill(2)
 
     fps = 1.0 // (start_time - prev_start_time)
     prev_start_time = start_time
@@ -490,8 +533,42 @@ while True:
     k = cv2.waitKey(1)
     if k == 27:
         break
+    if k == ord(' '):
+        cv2.waitKey(-1)
 
-print(idx)
+numpy_idxStatus = np.array(idxStatus)
+idxTrue = np.where(numpy_idxStatus == True)
+
+# for i in idxTrue[0]:
+#     indexPerson_request = idxList[i][0]
+#     indexAtt_request = idxList[i][1]
+#     uniqueIndex_request = idxList[i][2]
+#     print(f"C. Upload {indexPerson_request} {attTrue[indexAtt_request]-1} {uniqueIndex_request}")
+#     payload["sess_id"] = i
+#     payload["person_id"] = indexPerson_request
+#     payload["gender"] = genderID[uniqueIndex_request]
+#     payload["age"] = ageID[uniqueIndex_request]
+#     payload["att_dur"] = durationDataID[uniqueIndex_request][indexAtt_request-1]
+#     payload["interest"] = interestDataID[uniqueIndex_request][indexAtt_request-1]
+#     payload["date"] = date
+#     payload["time"] = timeDataID[uniqueIndex_request][indexAtt_request-1]
+#     payload["cam"] = cam
+#     payload["filename"] = pic_nameDataID[uniqueIndex_request][indexAtt_request-1]
+#     payload["session"] = session
+#     payload["robot_id"] = 1
+#     try:
+#         res = requests.post('https://ropi.web.id/api/pos.php', data=payload)
+#         if res.text == "Ok!":
+#             print("Upload Success!")
+#         else:
+#             print(f"Upload Failed ... {res.text}")
+#     except requests.exceptions.ConnectionError:
+#         print('No internet connection, upload failed ...')
+#     idxStatus[i] = False
+
+print(idxList)
+print()
+print(idxStatus)
 print()
 print(durationDataID)
 print()
@@ -499,62 +576,11 @@ print(timeDataID)
 print()
 print(pic_nameDataID)
 print()
-
-if index_request < 0:
-    index_request = 0
-    for i in range(index_request, sessID+1):
-        indexPerson_request = idx[i][0]
-        indexAtt_request = idx[i][1]
-        uniqueIndex_request = idx[i][2]
-        payload["sess_id"] = index_request
-        payload["person_id"] = indexPerson_request
-        payload["gender"] = genderID[uniqueIndex_request]
-        payload["age"] = ageID[uniqueIndex_request]
-        payload["att_dur"] = durationDataID[uniqueIndex_request][indexAtt_request-1]
-        payload["interest"] = interest[uniqueIndex_request]
-        payload["date"] = date
-        payload["time"] = timeDataID[uniqueIndex_request][indexAtt_request-1]
-        payload["cam"] = cam
-        payload["filename"] = pic_nameDataID[uniqueIndex_request][indexAtt_request-1]
-        payload["session"] = session
-        payload["robot_id"] = 1
-        try:
-            res = requests.post('https://ropi.web.id/api/pos.php', data=payload)
-            if res.text == "Ok!":
-                print("Upload Success!")
-            else:
-                print("Upload Failed ...")
-        except requests.exceptions.ConnectionError:
-            print('No internet connection, upload failed ...')
-
-if index_request > 0:
-    for i in range(index_request, sessID+1):
-        indexPerson_request = idx[i][0]
-        indexAtt_request = idx[i][1]
-        uniqueIndex_request = idx[i][2]
-        payload["sess_id"] = index_request
-        payload["person_id"] = indexPerson_request
-        payload["gender"] = genderID[uniqueIndex_request]
-        payload["age"] = ageID[uniqueIndex_request]
-        payload["att_dur"] = durationDataID[uniqueIndex_request][indexAtt_request-1]
-        payload["interest"] = interest[uniqueIndex_request]
-        payload["date"] = date
-        payload["time"] = timeDataID[uniqueIndex_request][indexAtt_request-1]
-        payload["cam"] = cam
-        payload["filename"] = pic_nameDataID[uniqueIndex_request][indexAtt_request-1]
-        payload["session"] = session
-        payload["robot_id"] = 1
-        try:
-            res = requests.post('https://ropi.web.id/api/pos.php', data=payload)
-            if res.text == "Ok!":
-                print("Upload Success!")
-            else:
-                print("Upload Failed ...")
-        except requests.exceptions.ConnectionError:
-            print('No internet connection, upload failed ...')
+# print(idxInactive)
+# print()
 
 workbook.close()
-print(f"Program Running Duration: {hour}:{min}:{sec}")
+print(f"Program Running Duration: {hours}:{minutes}:{seconds}")
 print(f'Data saved in {xlsx_path}/data_{date}_{length_data+1}.xlsx')
 print(f'Picture saved in {pic_path}/')
 cv2.destroyAllWindows()
