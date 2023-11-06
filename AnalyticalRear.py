@@ -6,8 +6,6 @@ from Tracker.centroidtracker import CentroidTracker
 import xlsxwriter
 import os
 import random
-import requests
-# from deepface import DeepFace
 
 faceProto = "face_deploy.prototxt"
 faceModel = "face_net.caffemodel"
@@ -27,8 +25,7 @@ genderList = ['Male', 'Female']
 # ageList = ['(0 - 2)', '(4 - 6)', '(8 - 12)', '(15 - 20)', '(25 - 32)', '(38 - 43)', '(48 - 53)', '(60 - 100)']
 ageList = ['(0 - 5)', '(6 - 11)', '(12 - 16)', '(17 - 21)', '(22 - 30)', '(31 - 40)', '(41 - 55)', '(56 - 100)']
 
-cam = 1
-part = 0
+cam = 3
 video = cv2.VideoCapture(cam)
 video.set(3, 960)
 video.set(4, 540)
@@ -52,7 +49,7 @@ if not isDir_xlsx:
 if not isDir_pic:
     os.makedirs(pic_path)
 
-length_data = len(os.listdir(f"C:/Users/NUC 11PAHi5/Pictures/Analytical/Dataset/Analytical_Person/{date}/{status}/Data/"))
+length_data = len(os.listdir(f"C:/Users/NUC 11PAHi5/Pictures/Analytical/Dataset/Analytical_Person/{date}/{status}/Data"))
 
 workbook = xlsxwriter.Workbook(f"{xlsx_path}/data_{date}_{length_data+1}.xlsx")
 worksheet = workbook.add_worksheet()
@@ -61,7 +58,7 @@ row = 0
 column = 0
 
 idList = [127, 33, 6, 359, 356]
-idList2 = [127, 152, 10, 356]
+idList2 = [127, 152, 10, 356, 151]
 
 fontStyle = cv2.FONT_HERSHEY_DUPLEX
 fontColor = (0, 0, 0)
@@ -113,10 +110,6 @@ agePredID = [
     [], [], [], [], [], [], [], [], [], [], [], [], [], [], [],
     [], [], [], [], [], [], [], [], [], [], [], [], [], [], [],
     ]
-emotionPredID = [
-    [], [], [], [], [], [], [], [], [], [], [], [], [], [], [],
-    [], [], [], [], [], [], [], [], [], [], [], [], [], [], [],
-    ]
 
 durationPred = [
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -145,13 +138,6 @@ genderID = [
     "", "", "", "", "", "",
     ]
 ageID = [
-    "", "", "", "", "", "",
-    "", "", "", "", "", "",
-    "", "", "", "", "", "",
-    "", "", "", "", "", "",
-    "", "", "", "", "", "",
-    ]
-emotionID = [
     "", "", "", "", "", "",
     "", "", "", "", "", "",
     "", "", "", "", "", "",
@@ -216,15 +202,16 @@ worksheet.write(row, column+7, 'Time')
 worksheet.write(row, column+8, 'Files Name')
 
 while True:
-    ret, frame = video.read()
-    if not ret:
-        break
     start_time = time.time()
     count = round(start_time, 2)
     if startProgram:
         startDuration = count
         startProgram = False
     duration = round((count - startDuration), 2)
+    ret, frame = video.read()
+    if not ret:
+        print("Camera disconnected")
+        break
     H, W = frame.shape[:2]
     # h_resize, w_resize = round(H*0.5), round(W*0.5)
     # frame = cv2.resize(frame, (w_resize, h_resize))
@@ -268,9 +255,11 @@ while True:
             ratioFont = h_rect/h_rect*0.5
             text = "Person {}".format(str_indexPerson)
             cv2.putText(frame, text, (centroid[2], centroid[3] - 10), fontStyle, ratioFont, (0, 255, 0), 1)
-            boxSize = (endX-startX)*(endY-startY)
-            biasX = round((endX-startX)*0.3)
-            biasY = round((endY-startY)*0.3)
+            boxSize = (endX - startX)*(endY - startY)
+
+            # DEFINE ROI
+            biasX = round((endX - startX)*0.35)
+            biasY = round((endY - startY)*0.35)
             xLeft, yLeft, xRight, yRight = startX-biasX, startY-biasY, endX+biasX, endY+biasY
             if xLeft < 0:
                 xLeft = 0
@@ -283,12 +272,19 @@ while True:
             ROI = new_image[yLeft:yRight, xLeft:xRight]
             image, faces = detector.findFaceMesh(ROI, draw=False)
             if faces:
+                # DEFINE DOTS
                 face = faces[0]
                 leftSideA, leftSideB, rightSideA, rightSideB, center = face[356], face[359], face[127], face[33], face[6]
+                upperSideA, upperSideB, bottomSideA, bottomSideB = face[10], face[151], face[200], face[152]
+                areaUpper = round(detector.findDistance(upperSideA, upperSideB)[0])
+                areaBottom = round(detector.findDistance(bottomSideA, bottomSideB)[0])
                 areaLeft = round(detector.findDistance(leftSideB, center)[0])
                 areaRight = round(detector.findDistance(rightSideB, center)[0])
-                # print(f'Left: {lengthLeft}, Right: {lengthRight}')
-                deviation = abs(areaLeft - areaRight)
+
+                # CALCULATE THE DEVIATIONS
+                deviationHorizontal = abs(areaLeft - areaRight)
+                deviationVertical = abs(areaUpper - areaBottom)
+                # print(f'Box Size: {boxSize}, Deviation Horizontal: {deviationHorizontal}, Deviation Vertical: {deviationVertical}')
                 if start_durationPred[index][1]:
                     start_durationPred[index][0] = duration
                     start_durationPred[index][1] = False
@@ -301,14 +297,10 @@ while True:
                     gender = genderList[genderPreds[0].argmax()]
                     agePreds = ageNet.forward()
                     age = ageList[agePreds[0].argmax()]
-                    # analyze = DeepFace.analyze(ROI, actions=['emotion'], detector_backend=backends[4])
-                    # print(analyze)
-                    # emotion = analyze['dominant_emotion']
                     genderPredID[index].append(gender)
                     agePredID[index].append(age)
                     genderID[index] = max(set(genderPredID[index]), key=genderPredID[index].count)
                     ageID[index] = max(set(agePredID[index]), key=agePredID[index].count)
-                    # emotionPredID[index].append(emotion)
                     startX_stats, endX_stats, startY_stats, endY_stats = startX, startX + 120, endY - 1, endY + 50
                     if startX_stats < 0:
                         startX_stats = 0
@@ -326,7 +318,6 @@ while True:
                 else:
                     genderID[index] = max(set(genderPredID[index]), key=genderPredID[index].count)
                     ageID[index] = max(set(agePredID[index]), key=agePredID[index].count)
-                    # emotionID[index] = max(set(emotionPredID[index]), key=emotionPredID[index].count)
                 
                 if ageID[index] == '(0 - 5)' or ageID[index] == '(6 - 11)':
                     ageID[index] = 'Kids'
@@ -341,76 +332,282 @@ while True:
                 cv2.rectangle(frame, (startX, startY), (endX, endY), (255, 255, 255), int(round(H/320)))
                 cv2.putText(frame, f'Gender: {finalGender}', (startX+2, endY+15), fontStyle, fontSize, fontColor, 1)
                 cv2.putText(frame, f'Age: {finalAge}', (startX+2, endY+30), fontStyle, fontSize, fontColor, 1)
-                if deviation < 15:
-                    if timeID[index][1]:
-                        timeID[index][0] = time.strftime('%T')
-                        timeID[index][1] = False
-                    if start_durationID[index][1]:
-                        start_durationID[index][0] = duration
-                        start_durationID[index][1] = False
-                    durationID[index] = round((duration - start_durationID[index][0]), 2)
-                    str_att = str(durationID[index])
-                    startX_stats, endX_stats, startY_stats, endY_stats = startX, startX + 120, endY - 1, endY + 50
-                    if startX_stats < 0:
-                        startX_stats = 0
-                    if startY_stats < 0:
-                        startY_stats = 0
-                    if endX_stats > W:
-                        endX_stats = W
-                    if endY_stats > H:
-                        endY_stats = H
-                    sub_frame = frame[startY_stats:endY_stats, startX_stats:endX_stats]
-                    white_rect = np.ones(sub_frame.shape, dtype=np.uint8) * 255
-                    res = cv2.addWeighted(sub_frame, 0.5, white_rect, 0.5, 1.0)
-                    frame[startY_stats:endY_stats, startX_stats:endX_stats] = res 
-                    cv2.putText(frame, f'Gender: {finalGender}', (startX+2, endY+15), fontStyle, fontSize, fontColor, 1)
-                    cv2.putText(frame, f'Age: {finalAge}', (startX+2, endY+30), fontStyle, fontSize, fontColor, 1)
-                    # cv2.putText(frame, f'Emotion: {emotionID[index]}', (startX+2, endY+45), fontStyle, fontSize, fontColor, 1)
-                    cv2.putText(frame, str_att, (startX+2, endY+45), fontStyle, fontSize, fontColor, 1)            
-                    durationDataID[index][attTrue[index]-1] = durationID[index]
-                    timeDataID[index][attTrue[index]-1] = timeID[index][0]
-                    totalDurationID[index] = sum(durationDataID[index])
-                    if durationID[index] >= 0.5:
-                        if pic_name[index][1]:
-                            pic_name[index][0] = f"{length_data+1}_{date}_id{indexPerson}_att{attTrue[index]}.jpg"
-                            pic_nameDataID[index][attTrue[index]-1] = pic_name[index][0]
-                            cv2.imwrite(f"{pic_path}/{pic_name[index][0]}", ROI)
-                            print(f"Picture saved as {pic_name[index][0]}")
-                        if attFalse[index] == attTrue[index]:
-                            attFalse[index] += 1
-                            idxList.append([indexPerson, attTrue[index], index])
-                            idxSet.add(indexPerson - 1)
-                            idxStatus.append(True)
-                        pic_name[index][1] = False
-                        sessID = idxList.index([indexPerson, attTrue[index], index])
-                        # print(f"Index: {sessID}, Person: {indexPerson}, Duration: {durationID[index]}, Attention: {attTrue[index]}")
-                        # print(idxList)
+                if boxSize < 40000:
+                    if deviationHorizontal < 10 and deviationVertical < 15:
+                        if timeID[index][1]:
+                            timeID[index][0] = time.strftime('%T')
+                            timeID[index][1] = False
+                        if start_durationID[index][1]:
+                            start_durationID[index][0] = duration
+                            start_durationID[index][1] = False
+                        durationID[index] = round((duration - start_durationID[index][0]), 2)
+                        str_att = str(durationID[index])
+                        startX_stats, endX_stats, startY_stats, endY_stats = startX, startX + 120, endY - 1, endY + 50
+                        if startX_stats < 0:
+                            startX_stats = 0
+                        if startY_stats < 0:
+                            startY_stats = 0
+                        if endX_stats > W:
+                            endX_stats = W
+                        if endY_stats > H:
+                            endY_stats = H
+                        sub_frame = frame[startY_stats:endY_stats, startX_stats:endX_stats]
+                        white_rect = np.ones(sub_frame.shape, dtype=np.uint8) * 255
+                        res = cv2.addWeighted(sub_frame, 0.5, white_rect, 0.5, 1.0)
+                        frame[startY_stats:endY_stats, startX_stats:endX_stats] = res 
+                        cv2.putText(frame, f'Gender: {finalGender}', (startX+2, endY+15), fontStyle, fontSize, fontColor, 1)
+                        cv2.putText(frame, f'Age: {finalAge}', (startX+2, endY+30), fontStyle, fontSize, fontColor, 1)
+                        cv2.putText(frame, str_att, (startX+2, endY+45), fontStyle, fontSize, fontColor, 1)            
+                        durationDataID[index][attTrue[index]-1] = durationID[index]
+                        timeDataID[index][attTrue[index]-1] = timeID[index][0]
+                        totalDurationID[index] = sum(durationDataID[index])
+                        if durationID[index] >= 0.5:
+                            if pic_name[index][1]:
+                                pic_name[index][0] = f"{length_data+1}_{date}_id{indexPerson}_att{attTrue[index]}.jpg"
+                                pic_nameDataID[index][attTrue[index]-1] = pic_name[index][0]
+                                cv2.imwrite(f"{pic_path}/{pic_name[index][0]}", ROI)
+                                print(f"Picture saved as {pic_name[index][0]}")
+                            if attFalse[index] == attTrue[index]:
+                                attFalse[index] += 1
+                                idxList.append([indexPerson, attTrue[index], index])
+                                idxSet.add(indexPerson - 1)
+                                idxStatus.append(True)
+                            pic_name[index][1] = False
+                            sessID = idxList.index([indexPerson, attTrue[index], index])
+                            # print(f"Index: {sessID}, Person: {indexPerson}, Duration: {durationID[index]}, Attention: {attTrue[index]}")
+                            # print(idxList)
 
-                    else:
-                        pic_name[index] = ["", True]
+                        else:
+                            pic_name[index] = ["", True]
                         
-                else:
-                    timeID[index][1] = True
-                    if attTrue[index] != attFalse[index]:
-                        attTrue[index] += 1
-                    startX_stats, endX_stats, startY_stats, endY_stats = startX, startX + 120, endY - 1, endY + 50
-                    if startX_stats < 0:
-                        startX_stats = 0
-                    if startY_stats < 0:
-                        startY_stats = 0
-                    if endX_stats > W:
-                        endX_stats = W
-                    if endY_stats > H:
-                        endY_stats = H
-                    start_durationID[index][1] = True
-                    sub_frame = frame[startY_stats:endY_stats, startX_stats:endX_stats]
-                    white_rect = np.ones(sub_frame.shape, dtype=np.uint8) * 255
-                    res = cv2.addWeighted(sub_frame, 0.5, white_rect, 0.5, 1.0)
-                    frame[startY_stats:endY_stats, startX_stats:endX_stats] = res
-                    cv2.putText(frame, f'Gender: {finalGender}', (startX+2, endY+15), fontStyle, fontSize, fontColor, 1)
-                    cv2.putText(frame, f'Age: {finalAge}', (startX+2, endY+30), fontStyle, fontSize, fontColor, 1)
-                    # cv2.putText(frame, f'Emotion: {emotionID[index]}', (startX+2, endY+45), fontStyle, fontSize, fontColor, 1)
+                    else:
+                        timeID[index][1] = True
+                        if attTrue[index] != attFalse[index]:
+                            attTrue[index] += 1
+                        startX_stats, endX_stats, startY_stats, endY_stats = startX, startX + 120, endY - 1, endY + 50
+                        if startX_stats < 0:
+                            startX_stats = 0
+                        if startY_stats < 0:
+                            startY_stats = 0
+                        if endX_stats > W:
+                            endX_stats = W
+                        if endY_stats > H:
+                            endY_stats = H
+                        start_durationID[index][1] = True
+                        sub_frame = frame[startY_stats:endY_stats, startX_stats:endX_stats]
+                        white_rect = np.ones(sub_frame.shape, dtype=np.uint8) * 255
+                        res = cv2.addWeighted(sub_frame, 0.5, white_rect, 0.5, 1.0)
+                        frame[startY_stats:endY_stats, startX_stats:endX_stats] = res
+                        cv2.putText(frame, f'Gender: {finalGender}', (startX+2, endY+15), fontStyle, fontSize, fontColor, 1)
+                        cv2.putText(frame, f'Age: {finalAge}', (startX+2, endY+30), fontStyle, fontSize, fontColor, 1)
 
+                if 40000 <= boxSize <= 55000:
+                    if deviationHorizontal < 20 and deviationVertical < 15:
+                        if timeID[index][1]:
+                            timeID[index][0] = time.strftime('%T')
+                            timeID[index][1] = False
+                        if start_durationID[index][1]:
+                            start_durationID[index][0] = duration
+                            start_durationID[index][1] = False
+                        durationID[index] = round((duration - start_durationID[index][0]), 2)
+                        str_att = str(durationID[index])
+                        startX_stats, endX_stats, startY_stats, endY_stats = startX, startX + 120, endY - 1, endY + 50
+                        if startX_stats < 0:
+                            startX_stats = 0
+                        if startY_stats < 0:
+                            startY_stats = 0
+                        if endX_stats > W:
+                            endX_stats = W
+                        if endY_stats > H:
+                            endY_stats = H
+                        sub_frame = frame[startY_stats:endY_stats, startX_stats:endX_stats]
+                        white_rect = np.ones(sub_frame.shape, dtype=np.uint8) * 255
+                        res = cv2.addWeighted(sub_frame, 0.5, white_rect, 0.5, 1.0)
+                        frame[startY_stats:endY_stats, startX_stats:endX_stats] = res 
+                        cv2.putText(frame, f'Gender: {finalGender}', (startX+2, endY+15), fontStyle, fontSize, fontColor, 1)
+                        cv2.putText(frame, f'Age: {finalAge}', (startX+2, endY+30), fontStyle, fontSize, fontColor, 1)
+                        cv2.putText(frame, str_att, (startX+2, endY+45), fontStyle, fontSize, fontColor, 1)            
+                        durationDataID[index][attTrue[index]-1] = durationID[index]
+                        timeDataID[index][attTrue[index]-1] = timeID[index][0]
+                        totalDurationID[index] = sum(durationDataID[index])
+                        if durationID[index] >= 0.5:
+                            if pic_name[index][1]:
+                                pic_name[index][0] = f"{length_data+1}_{date}_id{indexPerson}_att{attTrue[index]}.jpg"
+                                pic_nameDataID[index][attTrue[index]-1] = pic_name[index][0]
+                                cv2.imwrite(f"{pic_path}/{pic_name[index][0]}", ROI)
+                                print(f"Picture saved as {pic_name[index][0]}")
+                            if attFalse[index] == attTrue[index]:
+                                attFalse[index] += 1
+                                idxList.append([indexPerson, attTrue[index], index])
+                                idxSet.add(indexPerson - 1)
+                                idxStatus.append(True)
+                            pic_name[index][1] = False
+                            sessID = idxList.index([indexPerson, attTrue[index], index])
+                            # print(f"Index: {sessID}, Person: {indexPerson}, Duration: {durationID[index]}, Attention: {attTrue[index]}")
+                            # print(idxList)
+
+                        else:
+                            pic_name[index] = ["", True]
+                        
+                    else:
+                        timeID[index][1] = True
+                        if attTrue[index] != attFalse[index]:
+                            attTrue[index] += 1
+                        startX_stats, endX_stats, startY_stats, endY_stats = startX, startX + 120, endY - 1, endY + 50
+                        if startX_stats < 0:
+                            startX_stats = 0
+                        if startY_stats < 0:
+                            startY_stats = 0
+                        if endX_stats > W:
+                            endX_stats = W
+                        if endY_stats > H:
+                            endY_stats = H
+                        start_durationID[index][1] = True
+                        sub_frame = frame[startY_stats:endY_stats, startX_stats:endX_stats]
+                        white_rect = np.ones(sub_frame.shape, dtype=np.uint8) * 255
+                        res = cv2.addWeighted(sub_frame, 0.5, white_rect, 0.5, 1.0)
+                        frame[startY_stats:endY_stats, startX_stats:endX_stats] = res
+                        cv2.putText(frame, f'Gender: {finalGender}', (startX+2, endY+15), fontStyle, fontSize, fontColor, 1)
+                        cv2.putText(frame, f'Age: {finalAge}', (startX+2, endY+30), fontStyle, fontSize, fontColor, 1)
+                    
+                if 55000 < boxSize <= 70000:
+                    if deviationHorizontal < 30 and deviationVertical < 15:
+                        if timeID[index][1]:
+                            timeID[index][0] = time.strftime('%T')
+                            timeID[index][1] = False
+                        if start_durationID[index][1]:
+                            start_durationID[index][0] = duration
+                            start_durationID[index][1] = False
+                        durationID[index] = round((duration - start_durationID[index][0]), 2)
+                        str_att = str(durationID[index])
+                        startX_stats, endX_stats, startY_stats, endY_stats = startX, startX + 120, endY - 1, endY + 50
+                        if startX_stats < 0:
+                            startX_stats = 0
+                        if startY_stats < 0:
+                            startY_stats = 0
+                        if endX_stats > W:
+                            endX_stats = W
+                        if endY_stats > H:
+                            endY_stats = H
+                        sub_frame = frame[startY_stats:endY_stats, startX_stats:endX_stats]
+                        white_rect = np.ones(sub_frame.shape, dtype=np.uint8) * 255
+                        res = cv2.addWeighted(sub_frame, 0.5, white_rect, 0.5, 1.0)
+                        frame[startY_stats:endY_stats, startX_stats:endX_stats] = res 
+                        cv2.putText(frame, f'Gender: {finalGender}', (startX+2, endY+15), fontStyle, fontSize, fontColor, 1)
+                        cv2.putText(frame, f'Age: {finalAge}', (startX+2, endY+30), fontStyle, fontSize, fontColor, 1)
+                        cv2.putText(frame, str_att, (startX+2, endY+45), fontStyle, fontSize, fontColor, 1)            
+                        durationDataID[index][attTrue[index]-1] = durationID[index]
+                        timeDataID[index][attTrue[index]-1] = timeID[index][0]
+                        totalDurationID[index] = sum(durationDataID[index])
+                        if durationID[index] >= 0.5:
+                            if pic_name[index][1]:
+                                pic_name[index][0] = f"{length_data+1}_{date}_id{indexPerson}_att{attTrue[index]}.jpg"
+                                pic_nameDataID[index][attTrue[index]-1] = pic_name[index][0]
+                                cv2.imwrite(f"{pic_path}/{pic_name[index][0]}", ROI)
+                                print(f"Picture saved as {pic_name[index][0]}")
+                            if attFalse[index] == attTrue[index]:
+                                attFalse[index] += 1
+                                idxList.append([indexPerson, attTrue[index], index])
+                                idxSet.add(indexPerson - 1)
+                                idxStatus.append(True)
+                            pic_name[index][1] = False
+                            sessID = idxList.index([indexPerson, attTrue[index], index])
+                            # print(f"Index: {sessID}, Person: {indexPerson}, Duration: {durationID[index]}, Attention: {attTrue[index]}")
+                            # print(idxList)
+
+                        else:
+                            pic_name[index] = ["", True]
+                            
+                    else:
+                        timeID[index][1] = True
+                        if attTrue[index] != attFalse[index]:
+                            attTrue[index] += 1
+                        startX_stats, endX_stats, startY_stats, endY_stats = startX, startX + 120, endY - 1, endY + 50
+                        if startX_stats < 0:
+                            startX_stats = 0
+                        if startY_stats < 0:
+                            startY_stats = 0
+                        if endX_stats > W:
+                            endX_stats = W
+                        if endY_stats > H:
+                            endY_stats = H
+                        start_durationID[index][1] = True
+                        sub_frame = frame[startY_stats:endY_stats, startX_stats:endX_stats]
+                        white_rect = np.ones(sub_frame.shape, dtype=np.uint8) * 255
+                        res = cv2.addWeighted(sub_frame, 0.5, white_rect, 0.5, 1.0)
+                        frame[startY_stats:endY_stats, startX_stats:endX_stats] = res
+                        cv2.putText(frame, f'Gender: {finalGender}', (startX+2, endY+15), fontStyle, fontSize, fontColor, 1)
+                        cv2.putText(frame, f'Age: {finalAge}', (startX+2, endY+30), fontStyle, fontSize, fontColor, 1)
+                    
+                if boxSize > 70000:
+                    if deviationHorizontal < 40 and deviationVertical < 15:
+                        if timeID[index][1]:
+                            timeID[index][0] = time.strftime('%T')
+                            timeID[index][1] = False
+                        if start_durationID[index][1]:
+                            start_durationID[index][0] = duration
+                            start_durationID[index][1] = False
+                        durationID[index] = round((duration - start_durationID[index][0]), 2)
+                        str_att = str(durationID[index])
+                        startX_stats, endX_stats, startY_stats, endY_stats = startX, startX + 120, endY - 1, endY + 50
+                        if startX_stats < 0:
+                            startX_stats = 0
+                        if startY_stats < 0:
+                            startY_stats = 0
+                        if endX_stats > W:
+                            endX_stats = W
+                        if endY_stats > H:
+                            endY_stats = H
+                        sub_frame = frame[startY_stats:endY_stats, startX_stats:endX_stats]
+                        white_rect = np.ones(sub_frame.shape, dtype=np.uint8) * 255
+                        res = cv2.addWeighted(sub_frame, 0.5, white_rect, 0.5, 1.0)
+                        frame[startY_stats:endY_stats, startX_stats:endX_stats] = res 
+                        cv2.putText(frame, f'Gender: {finalGender}', (startX+2, endY+15), fontStyle, fontSize, fontColor, 1)
+                        cv2.putText(frame, f'Age: {finalAge}', (startX+2, endY+30), fontStyle, fontSize, fontColor, 1)
+                        cv2.putText(frame, str_att, (startX+2, endY+45), fontStyle, fontSize, fontColor, 1)            
+                        durationDataID[index][attTrue[index]-1] = durationID[index]
+                        timeDataID[index][attTrue[index]-1] = timeID[index][0]
+                        totalDurationID[index] = sum(durationDataID[index])
+                        if durationID[index] >= 0.5:
+                            if pic_name[index][1]:
+                                pic_name[index][0] = f"{length_data+1}_{date}_id{indexPerson}_att{attTrue[index]}.jpg"
+                                pic_nameDataID[index][attTrue[index]-1] = pic_name[index][0]
+                                cv2.imwrite(f"{pic_path}/{pic_name[index][0]}", ROI)
+                                print(f"Picture saved as {pic_name[index][0]}")
+                            if attFalse[index] == attTrue[index]:
+                                attFalse[index] += 1
+                                idxList.append([indexPerson, attTrue[index], index])
+                                idxSet.add(indexPerson - 1)
+                                idxStatus.append(True)
+                            pic_name[index][1] = False
+                            sessID = idxList.index([indexPerson, attTrue[index], index])
+                            # print(f"Index: {sessID}, Person: {indexPerson}, Duration: {durationID[index]}, Attention: {attTrue[index]}")
+                            # print(idxList)
+
+                        else:
+                            pic_name[index] = ["", True]
+                    
+                    else:
+                        timeID[index][1] = True
+                        if attTrue[index] != attFalse[index]:
+                            attTrue[index] += 1
+                        startX_stats, endX_stats, startY_stats, endY_stats = startX, startX + 120, endY - 1, endY + 50
+                        if startX_stats < 0:
+                            startX_stats = 0
+                        if startY_stats < 0:
+                            startY_stats = 0
+                        if endX_stats > W:
+                            endX_stats = W
+                        if endY_stats > H:
+                            endY_stats = H
+                        start_durationID[index][1] = True
+                        sub_frame = frame[startY_stats:endY_stats, startX_stats:endX_stats]
+                        white_rect = np.ones(sub_frame.shape, dtype=np.uint8) * 255
+                        res = cv2.addWeighted(sub_frame, 0.5, white_rect, 0.5, 1.0)
+                        frame[startY_stats:endY_stats, startX_stats:endX_stats] = res
+                        cv2.putText(frame, f'Gender: {finalGender}', (startX+2, endY+15), fontStyle, fontSize, fontColor, 1)
+                        cv2.putText(frame, f'Age: {finalAge}', (startX+2, endY+30), fontStyle, fontSize, fontColor, 1)
+                             
             else:
                 print("Face is not accurate")
                 timeID[index][1] = True
@@ -418,7 +615,6 @@ while True:
                 start_durationPred[index][1] = True
                 genderPredID[index] = []
                 agePredID[index] = []
-                # emotionPredID[index] = []
 
             if len(durationDataID[index]) == attTrue[index]-1:
                 durationDataID[index].append(0)
@@ -448,75 +644,6 @@ while True:
                 worksheet.write(sessID+1, column+7, timeID[index][0])         
                 worksheet.write(sessID+1, column+8, pic_name[index][0])        
 
-            # idxActive = set(objects.keys())
-            # idxInactive = idxSet.difference(idxActive)
-
-            # if attTrue[index] > 1:
-            #     sessID_request = idxList.index([indexPerson, attTrue[index]-1, index])
-            #     indexPerson_request = idxList[sessID_request][0]
-            #     indexAtt_request = idxList[sessID_request][1]
-            #     uniqueIndex_request = idxList[sessID_request][2]
-            #     # print(f"indexPerson_request: {indexPerson_request}, indexAtt_request: {indexAtt_request}, uniqueIndex_request: {uniqueIndex_request}")
-            #     if idxStatus[sessID_request]:
-            #         print(f"A. Upload {indexPerson} {attTrue[index]-1} {index}")
-            #         payload["sess_id"] = sessID_request
-            #         payload["person_id"] = indexPerson_request
-            #         payload["gender"] = genderID[uniqueIndex_request]
-            #         payload["age"] = ageID[uniqueIndex_request]
-            #         payload["att_dur"] = durationDataID[uniqueIndex_request][indexAtt_request-1]
-            #         payload["interest"] = interestDataID[uniqueIndex_request][indexAtt_request-1]
-            #         payload["date"] = date
-            #         payload["time"] = timeDataID[uniqueIndex_request][indexAtt_request-1]
-            #         payload["cam"] = cam
-            #         payload["filename"] = pic_nameDataID[uniqueIndex_request][indexAtt_request-1]
-            #         payload["session"] = session
-            #         payload["robot_id"] = 1
-            #         try:
-            #             res = requests.post('https://ropi.web.id/api/pos.php', data=payload)
-            #             if res.text == "Ok!":
-            #                 print("Upload Success!")
-            #             else:
-            #                 print(f"Upload Failed ... {res.text}")
-            #         except requests.exceptions.ConnectionError:
-            #             print('No internet connection, upload failed ...')
-            #     idxStatus[sessID_request] = False
-
-            # if len(idxInactive) > 0:
-            #     idxValue = idxInactive.pop()
-            #     index_request = idxValue % 30
-            #     if durationDataID[idxValue][-1] == 0:
-            #         durationDataID[idxValue].remove(0)
-            #         attTrue[idxValue] -= 1
-            #     sessID_request = idxList.index([idxValue + 1, attTrue[idxValue], index_request])
-            #     indexPerson_request = idxList[sessID_request][0]
-            #     indexAtt_request = idxList[sessID_request][1]
-            #     uniqueIndex_request = idxList[sessID_request][2]
-            #     # print(f"indexPerson_request: {indexPerson_request}, indexAtt_request: {indexAtt_request}, uniqueIndex_request: {uniqueIndex_request}")
-            #     if idxStatus[sessID_request]:
-            #         print(f"B. Upload {idxValue + 1} {attTrue[idxValue]} {index_request}")
-            #         payload["sess_id"] = sessID_request
-            #         payload["person_id"] = indexPerson_request
-            #         payload["gender"] = genderID[uniqueIndex_request]
-            #         payload["age"] = ageID[uniqueIndex_request]
-            #         payload["att_dur"] = durationDataID[uniqueIndex_request][indexAtt_request-1]
-            #         payload["interest"] = interestDataID[uniqueIndex_request][indexAtt_request-1]
-            #         payload["date"] = date
-            #         payload["time"] = timeDataID[uniqueIndex_request][indexAtt_request-1]
-            #         payload["cam"] = cam
-            #         payload["filename"] = pic_nameDataID[uniqueIndex_request][indexAtt_request-1]
-            #         payload["session"] = session
-            #         payload["robot_id"] = 1
-            #         try:
-            #             res = requests.post('https://ropi.web.id/api/pos.php', data=payload)
-            #             if res.text == "Ok!":
-            #                 print("Upload Success!")
-            #             else:
-            #                 print(f"Upload Failed ... {res.text}")
-            #         except requests.exceptions.ConnectionError:
-            #             print('No internet connection, upload failed ...')
-            #     idxStatus[sessID_request] = False
-            #     idxSet.remove(min(idxSet))
-
     else:
         print("No Face")
 
@@ -539,33 +666,6 @@ while True:
 numpy_idxStatus = np.array(idxStatus)
 idxTrue = np.where(numpy_idxStatus == True)
 
-# for i in idxTrue[0]:
-#     indexPerson_request = idxList[i][0]
-#     indexAtt_request = idxList[i][1]
-#     uniqueIndex_request = idxList[i][2]
-#     print(f"C. Upload {indexPerson_request} {attTrue[indexAtt_request]-1} {uniqueIndex_request}")
-#     payload["sess_id"] = i
-#     payload["person_id"] = indexPerson_request
-#     payload["gender"] = genderID[uniqueIndex_request]
-#     payload["age"] = ageID[uniqueIndex_request]
-#     payload["att_dur"] = durationDataID[uniqueIndex_request][indexAtt_request-1]
-#     payload["interest"] = interestDataID[uniqueIndex_request][indexAtt_request-1]
-#     payload["date"] = date
-#     payload["time"] = timeDataID[uniqueIndex_request][indexAtt_request-1]
-#     payload["cam"] = cam
-#     payload["filename"] = pic_nameDataID[uniqueIndex_request][indexAtt_request-1]
-#     payload["session"] = session
-#     payload["robot_id"] = 1
-#     try:
-#         res = requests.post('https://ropi.web.id/api/pos.php', data=payload)
-#         if res.text == "Ok!":
-#             print("Upload Success!")
-#         else:
-#             print(f"Upload Failed ... {res.text}")
-#     except requests.exceptions.ConnectionError:
-#         print('No internet connection, upload failed ...')
-#     idxStatus[i] = False
-
 print(idxList)
 print()
 print(idxStatus)
@@ -576,8 +676,6 @@ print(timeDataID)
 print()
 print(pic_nameDataID)
 print()
-# print(idxInactive)
-# print()
 
 workbook.close()
 print(f"Program Running Duration: {hours}:{minutes}:{seconds}")
